@@ -1,0 +1,1 @@
+[{"category": "Photography", "rating": 4.5, "name": "Paper Camera", "developer_email": "mailto:paper-camera-android@jfdplabs.com", "rating_count": 22799, "developer_website": "https://www.google.com/url?q=http://www.jfdplabs.com&sa=D&usg=AFQjCNFcKx1saaLTy-iKwBvicX6Hm4iu5Q", "install_from": 1000000, "install_to": 5000000}]
