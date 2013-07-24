@@ -1,62 +1,118 @@
 import sys
+import urllib
 import urllib2
 from bs4 import BeautifulSoup
 import os
-import json
 import timeit
-import ast
 
-import sqlite3 as lite
+#from google.appengine.api import urlfetch
 
-url1='https://play.google.com/store/apps/collection/topselling_paid'
-url2='https://play.google.com/store/apps/collection/topselling_free'
-url3='https://play.google.com/store/apps/details?id=com.dama.papercamera'
+#import sqlite3 as lite
 
-list_of_dict=[]
+test_url='https://play.google.com/store/apps/details?id=com.dama.papercamera'
 
-file1='applist_paid'
-file2='applist_free'
-file3='database_paid'
-file4='database_free'
-filetest='test.txt'
+user_agent = 'Python-urllib/1.17 AppEngine-Google'
 
-arr1=[]
-arr2=[]
-arr3=[]
-arr4=[]
-arrtest=[]
+def generate_app_list(n=500):
+	#returns an array containing app list
+	arr1=[]
+	arr2=[]
+
+	for i in range(0,n,24):
+		appurl = ''
+		url ='https://play.google.com/store/apps/collection/topselling_paid?start='+str(i)
+		#soup = BeautifulSoup( urllib.urlopen(url).read() )
+		#result = urlfetch.fetch(url)
+		#url_response = urlfetch.fetch( url, headers={ "User-Agent" : user_agent } ).content
+		#soup = BeautifulSoup( url_response )
+
+		headers = { 'User-Agent' : 'Yugdom 2.0 by /u/Tomarina github.com/sauravtom/yugdom','Host' : 'play.google.com' }
+		req = urllib2.Request(url, None, headers)
+		soup = BeautifulSoup( urllib2.urlopen(req).read() )
+
+		for j in soup.find_all('li',{'class' : 'goog-inline-block'}):
+			try : appurl = 'https://play.google.com/store/apps/details?id=' + j.get('data-docid')
+			except : appurl = 'XXXXXXXXXX'
+			
+			arr1.append(appurl)
+		print appurl	
+		print "I #%s : %s" %( i,appurl.split('=')[-1] )
+
+		url ='https://play.google.com/store/apps/collection/topselling_free?start='+str(i)
+		soup = BeautifulSoup( urllib.urlopen(url).read() )
+
+		for j in soup.find_all('li',{'class' : 'goog-inline-block'}):
+			appurl = 'https://play.google.com/store/apps/details?id=' + j.get('data-docid')
+			arr2.append(appurl)
+		print "II #%s : %s" %( i,appurl.split('=')[-1] )
+
+	return (arr1,arr2)
 
 
-def call_db():
-	with open(file3,'r') as f:
-	    content = f.readlines()
-	    c = ast.literal_eval(content[0])
+def generate_app_details(app_url,rank):
+	#returns a dictionary containing app details of the app-url passed as the parameter
 
-	for i in c:
-		add_to_db[c]
+	d={}
+	d['rank'] = rank
+	soup = BeautifulSoup( urllib.urlopen(app_url).read() )
+	head = soup.find('td',{'class' : 'doc-banner-title-container'})
+	
+	try : d['name'] = head.find('h1',{'class' : 'doc-banner-title'}).get_text()
+	except : d['name'] = '17291729'
+	
+	content = soup.find('div',{'class' : 'doc-overview'})
+
+	try: d['developer_website'] = content.find('div',{'class' : 'doc-description-show-all'}).findNext('a').get('href')
+	except : d['developer_website'] = '17291729'
+
+	try: d['description'] = content.find('div',{'id' : 'doc-original-text'})
+	except : d['description'] = '17291729'
+
+	metadata = soup.find('dl',{'class' : 'doc-metadata-list'})
+
+	try: d['category'] = metadata.find(text="Category:").findNext('dd').contents[0].get_text()
+	except: d['category'] = '17291729'
+
+	try: d['rating'] = float( metadata.find('div',{'class' : 'ratings goog-inline-block'}).get('content') )
+	except: d['rating'] = 17291729
+
+	try: d['rating_count']= int(metadata.find('span',{'itemprop' : 'ratingCount'}).get('content'))
+	except: d['rating_count'] = 17291729
+	
+	try : unicode_trash = metadata.find(text="Installs:").findNext('dd').contents[0]
+	except: 
+		d['install_from'] = 17291729
+		d['install_to'] = 17291729
+	else:
+		d['install_from'] = int( unicode_trash.encode('ascii','ignore').split('-')[0].replace(',','') )
+		d['install_to'] = int( unicode_trash.encode('ascii','ignore').split('-')[1].replace(',','') )
+
+	print d
+	return d
 
 
-def add_to_db(db,):
-	x = c[0]
-	#print c[1]['rating']
+def add_to_db(dict,table,db='test.db'):
 
 	try:
-		con = lite.connect('test.db')
+		con = lite.connect(db)
 		con.row_factory = lite.Row
 		cur = con.cursor()
 		
-		#check for existence of table cars
-		cur.executescript("""
-			DROP TABLE IF EXISTS Cars;
-			CREATE TABLE Cars(rank INT,name TEXT,developer_website TEXT,developer_email TEXT,category TEXT,rating REAL,rating_count INT,install_from INT,install_to INT);
-			""")
-		
-		string = "INSERT INTO Cars VALUES(%s,'%s','%s','%s','%s',%s,%s,%s,%s)" % (1,x['name'],x['developer_website'],x['developer_email'],x['category'],x['rating'],x['rating_count'],x['install_from'],x['install_to'])
+		# add a check for existence of table cars first
 
+		s="""
+			DROP TABLE IF EXISTS %s;
+			CREATE TABLE %s(rank INT,name TEXT,developer_website TEXT,developer_email TEXT,category TEXT,rating REAL,rating_count INT,install_from INT,install_to INT);
+			""" % (table)
+
+		cur.executescript(s)
+		
+		string = "INSERT INTO %s VALUES(%s,%s,'%s','%s','%s','%s',%s,%s,%s,%s)" % (table,dict['rank'],dict['name'],dict['developer_website'],dict['description'],dict['category'],dict['rating'],dict['rating_count'],dict['install_from'],dict['install_to'])
 
 		print string
 		cur.execute(string)
 		con.commit()
+		print 'DONE'
 
 	except lite.Error , e:
 		if con:
@@ -64,133 +120,31 @@ def add_to_db(db,):
 		print "Error %s" % e.args[0]
 		sys.exit()
 
-	cur.execute("SELECT * FROM Cars")
-	rows = cur.fetchall()	
-	print rows[0]['name']
+	#cur.execute("SELECT * FROM Cars")
+	#rows = cur.fetchall()
+	#print rows['name']
 
 
+def main():
+	arr1,arr2 = generate_app_list()
 
-def generate_app_list():
-	#generate a file containing a list of apps
+	for i in arr1:
+		d = generate_app_details(i,arr1.index(i)+1)
+		#sys.exit(0)
+		add_to_db(d)
 
-	for i in range(0,500,24):
-		curl ='https://play.google.com/store/apps/collection/topselling_paid?start='+str(i)
-		append_app_entry(curl,arr1,file1)
-
-		curl ='https://play.google.com/store/apps/collection/topselling_free?start='+str(i)
-		append_app_entry(curl,arr2,file2)
-
-
-def append_app_entry(url,arr=arrtest,file=filetest):
-	# appends a single app url to the list
-
-	print 'Now Scraping ' +url
-
-	soup = BeautifulSoup( urllib2.urlopen(url).read() )
-
-	for i in soup.find_all('li',{'class' : 'goog-inline-block'}):
-		appurl = 'https://play.google.com/store/apps/details?id=' + i.get('data-docid')
-		arr.append(appurl)
-		
-		with open(file, "w") as myfile:
-			for item in arr:
-			  myfile.write("%s\n" % item)
-
-
-def generate_app_database():
-	with open(file1,'r') as f:
-	    content = f.readlines()
-	for i in content:
-		append_app_details(i,arr3,file3)
-
-	with open(file2,'r') as f:
-	    content = f.readlines()
-	for i in content:
-		append_app_details(i,arr4,file4)	
-
-
-def append_app_details(app_url=url3,arr=arrtest,file=filetest):
-	d={}
-	soup = BeautifulSoup( urllib2.urlopen(app_url).read() )
-
-
-	try : foo = soup.find('td',{'class' : 'doc-banner-title-container'})
-	except : return 'error'
-	
-	try : d['name'] = foo.find('h1',{'class' : 'doc-banner-title'}).get_text()
-	except : d['name'] = '***'
-	
-	content = soup.find('div',{'class' : 'doc-overview'})
-
-	try:
-		for a in content.find_all('a'):
-			if 'Website' in a.get_text():
-				d['developer_website'] = a.get('href')
-			if 'Email' in a.get_text():
-				d['developer_email'] = a.get('href')
-	except:
-		d['developer_email'] = '***'
-		d['developer_website'] = '***'
-
-	metadata = soup.find('dl',{'class' : 'doc-metadata-list'})
-
-	try: d['category'] = metadata.find(text="Category:").findNext('dd').contents[0].get_text()
-	except: d['category'] = '***'
-
-	try: d['rating'] = float( metadata.find('div',{'class' : 'ratings goog-inline-block'}).get('content') )
-	except: d['rating'] = '***'
-
-	try:
-		d['rating_count']= int(metadata.find('span',{'itemprop' : 'ratingCount'}).get('content'))
-	except:
-		d['rating_count'] = '***'
-	
-	#install should be 2 fields from and to
-	try : unicode_trash = metadata.find(text="Installs:").findNext('dd').contents[0]
-	except: 
-		d['install_from'] = '***'
-		d['install_to'] = '***'
-	else:
-		d['install_from'] = int( unicode_trash.encode('ascii','ignore').split('-')[0].replace(',','') )
-		d['install_to'] = int( unicode_trash.encode('ascii','ignore').split('-')[1].replace(',','') )
-
-
-	
-	
-	'''
-	#obsolute piece of code
-
-	try : 
-		d['developer_orgname'] = foo.find('a',{'class' : 'doc-header-link'}).get_text()
-		d['developer_otherapps'] = 'https://play.google.com/store/apps/details?id=' + foo.find('a',{'class' : 'doc-header-link'}).get('href')
-	except : pass
-	try: d['category_link'] = 'https://play.google.com/store/apps/details?id=' + metadata.find(text="Category:").findNext('dd').contents[0].get('href')
-	except: pass
-	try: d['img_last30days'] = metadata.find(text="Installs:").findNext('dd').contents[1].img.get('src')
-	except: pass
-	try: d['last_published'] = metadata.find('time').get_text()
-	except: pass
-	try : d['content_rating'] = metadata.find(text="Content Rating:").findNext('dd').contents[0]
-	except: pass
-	'''
-
-	arr.append(d)
-		
-	with open(file, 'w') as outfile:
-		json.dump(arr, outfile)  
-		
-	print 'successfully appended file ' + file
-
-	return d
-
-
+	for i in arr2:
+		d=generate_app_details(i,arr1.index(i)+1)
+		add_to_db(d)
 
 
 if __name__ == '__main__':
-	#start = timeit.default_timer()
-	#generate_app_list()
-	#print append_app_details()
-	call_db()
-	#stop = timeit.default_timer()
-	#print stop - start 
+	start = timeit.default_timer()
+	
+	#print generate_app_details(test_url,2)
+	#print main()
+	print generate_app_list(25)
+
+	stop = timeit.default_timer()
+	print stop - start 
 

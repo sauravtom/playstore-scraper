@@ -1,53 +1,35 @@
-import flask, flask.views
-import os
-from scraper import *
-import sqlite3 as lite
-
-app = flask.Flask(__name__)
-# Don't do this!
-app.secret_key = "bacon"
+import webapp2
+from google.appengine.ext import ndb
+from scraper import generate_app_list,generate_app_details
 
 
-@app.route('/paid2')
-def foo():
-    with open(file1,'r') as f:
-        content = f.readlines()
-    flask.flash(content)
-    return flask.render_template('paid.html',content=content)
+class MainPage(webapp2.RequestHandler):
 
-class Paid(flask.views.MethodView):
     def get(self):
-    	with open(file1,'r') as f:
-    	    content = f.readlines()
-        flask.flash(content)
-        return flask.render_template('paid.html',content=content)
+        self.response.headers['Content-Type'] = 'text/plain'
+     
+        
+        arr1,arr2 = generate_app_list()
+        self.response.write(arr1)
 
-class Free(flask.views.MethodView):
-    def get(self):
-    	with open(file2,'r') as f:
-    	    content = f.readlines()
-        #flask.flash(content)
-        return flask.render_template('free.html',content=content)
+        '''
+        for i in arr1:
+            d = generate_app_details(i,arr1.index(i)+1)
+            #sys.exit(0)
+            self.response.write(i)
 
-class Index(flask.views.MethodView):
-    def get(self):
-        return flask.render_template('index.html')      
+        for i in arr2:
+            #d=generate_app_details(i,arr1.index(i)+1)
+            self.response.write(i)
+         '''
 
-class DBpaid(flask.views.MethodView):
-    def get(self):
-    	with open(file3,'r') as f:
-    	    content = f.readlines()
-        flask.flash(content)
-        #print template.render(dictionary=content)
-        #return flask.render_template('DBpaid.html',content=content)
-        return render_template("DBpaid.html", title='Edit Creative', creative_handler=creative_handler,content=content)         
+class Product(ndb.Model):
+    link = ndb.KeyProperty(required = True)
+    @classmethod
+    def addProduct(cls,link):
+        product = Product(link = link)
+        return product.put()
 
-app.add_url_rule('/', view_func=Index.as_view('main'), methods=['GET'])    
-app.add_url_rule('/paid', view_func=Paid.as_view('main1'), methods=['GET'])
-app.add_url_rule('/free', view_func=Free.as_view('main2'), methods=['GET'])
-app.add_url_rule('/DBpaid', view_func=DBpaid.as_view('main3'), methods=['GET'])
-
-app.debug = True
-app.run()
-
-
+application = webapp2.WSGIApplication([
+    ('/', MainPage),
+], debug=True)
